@@ -3,8 +3,8 @@ import { useState, useEffect } from 'react'
 import './App.css'
 
 function App() {
-  const [ingredients, setIngredients] = useState([]); // Stores the bubbles
-  const [currentInput, setCurrentInput] = useState(""); // Stores text being typed
+  const [ingredients, setIngredients] = useState([]); 
+  const [currentInput, setCurrentInput] = useState(""); 
   const [recipe, setRecipe] = useState(null);
   const [loading, setLoading] = useState(false);
   const [favorites, setFavorites] = useState([]);
@@ -14,10 +14,9 @@ function App() {
     if (saved) setFavorites(JSON.parse(saved));
   }, []);
 
-  // 1. Handle "Enter" key to add ingredient
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' || e.key === ',') {
-      e.preventDefault(); // Stop default form submit
+      e.preventDefault(); 
       addIngredient();
     }
   };
@@ -26,26 +25,34 @@ function App() {
     const trimmed = currentInput.trim();
     if (trimmed && !ingredients.includes(trimmed)) {
       setIngredients([...ingredients, trimmed]);
-      setCurrentInput(""); // Clear input box
+      setCurrentInput(""); 
     }
   };
 
-  // 2. Remove ingredient when clicking "X"
   const removeIngredient = (indexToRemove) => {
     setIngredients(ingredients.filter((_, index) => index !== indexToRemove));
   };
 
+  // --- UPDATED FUNCTION START ---
   const generateRecipe = async () => {
     if (ingredients.length === 0) return alert("Add at least one ingredient!");
     
     setLoading(true);
     setRecipe(null);
     
-    // Join array into string: "Eggs, Milk, Cheese"
     const ingredientsString = ingredients.join(", ");
 
+    // 1. DYNAMIC URL SELECTION
+    // If on Vercel (PROD), use relative path '/api'. 
+    // If on Localhost, use the full HTTP URL.
+    const API_BASE = import.meta.env.PROD 
+      ? '/api' 
+      : 'http://localhost:5000/api'; 
+      // Note: I added '/api' to localhost too, so your backend only needs one route name.
+
     try {
-      const response = await fetch('http://localhost:5000/generate-recipe', {
+      // 2. USE THE DYNAMIC URL
+      const response = await fetch(`${API_BASE}/generate-recipe`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ingredients: ingredientsString }),
@@ -63,6 +70,7 @@ function App() {
     }
     setLoading(false);
   };
+  // --- UPDATED FUNCTION END ---
 
   const saveRecipe = () => {
     if (!recipe) return;
@@ -91,7 +99,6 @@ function App() {
         <p>Type an ingredient and press <strong>Enter</strong> to add it.</p>
       </header>
       
-      {/* NEW: TAG INPUT SYSTEM */}
       <div className="input-section">
         <div className="tag-container">
           {ingredients.map((item, index) => (

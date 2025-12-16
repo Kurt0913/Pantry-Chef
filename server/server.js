@@ -1,4 +1,4 @@
-// server.js (Robust Free Mode)
+// server.cjs - The "Hidden Gems" Edition
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
@@ -19,67 +19,87 @@ const openai = new OpenAI({
   }
 });
 
-// A larger list of free models to try
-const MODELS = [
-  "google/gemini-2.0-flash-exp:free",       // 1. Google Gemini 2 (Newest)
-  "google/gemini-exp-1206:free",            // 2. Google Experimental
-  "meta-llama/llama-3.2-3b-instruct:free",  // 3. Meta Llama 3.2 (Fast)
-  "microsoft/phi-3-mini-128k-instruct:free",// 4. Microsoft Phi
-  "huggingfaceh4/zephyr-7b-beta:free",      // 5. Zephyr (Reliable Backup)
-  "mistralai/mistral-7b-instruct:free",     // 6. Mistral 7B
+
+const MODELS = [ "nvidia/nemotron-3-nano-30b-a3b:free", "mistralai/devstral-2512:free", "amazon/nova-2-lite-v1:free",
+  "arcee-ai/trinity-mini:free", "tngtech/tng-r1t-chimera:free", "allenai/olmo-3-32b-think:free", "kwaipilot/kat-coder-pro:free",
+  "nvidia/nemotron-nano-12b-v2-vl:free", "alibaba/tongyi-deepresearch-30b-a3b:free", "nvidia/nemotron-nano-9b-v2:free",
+  "openai/gpt-oss-120b:free", "openai/gpt-oss-20b:free", "z-ai/glm-4.5-air:free", "qwen/qwen3-coder:free", "moonshotai/kimi-k2:free", "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
+  "google/gemma-3n-e2b-it:free"
 ];
 
-app.post('/generate-recipe', async (req, res) => {
+// --- 🛡️ THE SAFETY NET (Your 100% Guarantee) ---
+const BACKUP_RECIPE = {
+  title: "Emergency 'Pantry Special' Stir-Fry",
+  description: "The AI chefs are currently swamped with requests, but here is a foolproof recipe for your ingredients!",
+  ingredients_list: [
+    "Your main protein (chicken, beef, tofu, or eggs)",
+    "Any vegetables (broccoli, carrots, onions)",
+    "Soy sauce, garlic, and oil",
+    "Rice or noodles"
+  ],
+  instructions: [
+    "Heat oil in a pan over high heat.",
+    "Cook protein until browned and set aside.",
+    "Stir-fry vegetables until tender.",
+    "Combine everything with soy sauce and garlic.",
+    "Serve over rice or noodles."
+  ]
+};
+
+app.post('/api/generate-recipe', async (req, res) => {
   const { ingredients } = req.body;
   if (!ingredients) return res.status(400).send({ error: "No ingredients provided" });
 
   console.log(`\n--- NEW REQUEST: ${ingredients} ---`);
-  let lastError = null;
 
   for (const modelName of MODELS) {
     try {
       console.log(`Attempting with: ${modelName}...`);
       
-      const completion = await openai.chat.completions.create({
-        model: modelName,
-        messages: [
-          { 
-            role: "system", 
-            content: "You are a professional chef. Respond ONLY with a valid JSON object containing: 'title', 'description', 'ingredients_list' (array of strings), 'instructions' (array of strings). Do not use markdown." 
-          },
-          { 
-            role: "user", 
-            content: `Create a recipe using: ${ingredients}` 
-          }
-        ],
-      });
+      // 🔧 CRITICAL FIX: Merge System Prompt
+      // Google models (and some new ones) hate the "system" role.
+      // We force everything into a single "user" message.
+      const completion = await Promise.race([
+        openai.chat.completions.create({
+          model: modelName,
+          messages: [
+            { 
+              role: "user", 
+              content: `
+                SYSTEM: You are a professional chef. Respond ONLY with a valid JSON object.
+                FORMAT: { "title": "String", "description": "String", "ingredients_list": ["String"], "instructions": ["String"] }.
+                USER: Create a recipe using: ${ingredients}
+              ` 
+            }
+          ],
+        }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 8000))
+      ]);
 
       const aiResponse = completion.choices[0].message.content;
-      
-      // Clean up markdown just in case
       const cleanJson = aiResponse.replace(/```json|```/g, '').trim();
       
-      // Verify it is actual JSON before sending
+      // Validation check
+      if (!cleanJson.startsWith('{')) throw new Error("Invalid JSON format");
+      
       const recipeData = JSON.parse(cleanJson);
       
       console.log(`✅ SUCCESS! Served by ${modelName}`);
       return res.json(recipeData); 
 
     } catch (error) {
-      // Log the specific error for this model (404, 429, etc)
-      console.log(`❌ Failed (${modelName}): ${error.status || error.message}`);
-      lastError = error;
+      console.log(`   ⏭️ Skipped (${error.status || error.message})`);
     }
   }
 
-  // If we reach here, literally everyone failed
-  console.log("💥 All models failed.");
-  res.status(500).send({ 
-    error: "All chefs are busy. Please try again in 1 minute.", 
-    details: lastError ? lastError.message : "Global outage"
-  });
+  console.log("⚠️ All AI models failed. Serving Backup.");
+  res.json(BACKUP_RECIPE);
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+  });
+}
+
+module.exports = app;
